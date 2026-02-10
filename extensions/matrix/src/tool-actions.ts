@@ -26,6 +26,23 @@ const messageActions = new Set(["sendMessage", "editMessage", "deleteMessage", "
 const reactionActions = new Set(["react", "reactions"]);
 const pinActions = new Set(["pinMessage", "unpinMessage", "listPins"]);
 
+function readBooleanParam(params: Record<string, unknown>, key: string): boolean | undefined {
+  const raw = params[key];
+  if (typeof raw === "boolean") {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim().toLowerCase();
+    if (trimmed === "true") {
+      return true;
+    }
+    if (trimmed === "false") {
+      return false;
+    }
+  }
+  return undefined;
+}
+
 function readRoomId(params: Record<string, unknown>, required = true): string {
   const direct = readStringParam(params, "roomId") ?? readStringParam(params, "channelId");
   if (direct) {
@@ -108,10 +125,12 @@ export async function handleMatrixAction(
         const limit = readNumberParam(params, "limit", { integer: true });
         const before = readStringParam(params, "before");
         const after = readStringParam(params, "after");
+        const includeMedia = readBooleanParam(params, "includeMedia");
         const result = await readMatrixMessages(roomId, {
           limit: limit ?? undefined,
           before: before ?? undefined,
           after: after ?? undefined,
+          includeMedia: includeMedia ?? undefined,
         });
         return jsonResult({ ok: true, ...result });
       }
