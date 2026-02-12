@@ -77,12 +77,16 @@ export function resolveMatrixSessionKey(params: {
   threadRootId?: string | null;
   isDirectMessage?: boolean;
 }): { sessionKey: string; parentSessionKey?: string } {
+  if (params.isDirectMessage) {
+    return { sessionKey: params.route.sessionKey, parentSessionKey: undefined };
+  }
+
   const baseSessionKey =
     params.sessionScope === "agent"
       ? `agent:${params.route.agentId.trim().toLowerCase() || "main"}:matrix:main`
       : params.route.sessionKey;
   const threadRootId = (params.threadRootId ?? "").trim();
-  if (!threadRootId || params.isDirectMessage) {
+  if (!threadRootId) {
     return { sessionKey: baseSessionKey, parentSessionKey: undefined };
   }
   return {
@@ -477,7 +481,6 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
 
       let threadStarterBody: string | undefined;
       let threadLabel: string | undefined;
-      let shouldRecordSession = true;
       const parentSessionKey = resolvedParentSessionKey;
 
       if (threadRootId && parentSessionKey) {
@@ -492,8 +495,9 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
           try {
             const rootEvent = await fetchEventSummary(client, roomId, threadRootId);
             if (!rootEvent) {
-              shouldRecordSession = false;
-              logVerboseMessage(`matrix: thread root ${threadRootId} not found (retryable)`);
+              logVerboseMessage(
+                `matrix: thread root ${threadRootId} not found; continuing without thread starter`,
+              );
             } else if (rootEvent.body) {
               const rootSenderName = rootEvent.sender
                 ? await getMemberDisplayName(roomId, rootEvent.sender)
@@ -510,9 +514,8 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
               threadLabel = `Matrix thread in ${roomName ?? roomId}`;
             }
           } catch (err) {
-            shouldRecordSession = false;
             logVerboseMessage(
-              `matrix: failed to fetch thread root ${threadRootId} (retryable): ${String(err)}`,
+              `matrix: failed to fetch thread root ${threadRootId}; continuing without thread starter: ${String(err)}`,
             );
           }
         }
@@ -578,28 +581,26 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         ParentSessionKey: parentSessionKey,
       });
 
-      if (shouldRecordSession) {
-        await core.channel.session.recordInboundSession({
-          storePath,
-          sessionKey: ctxPayload.SessionKey ?? sessionKey,
-          ctx: ctxPayload,
-          updateLastRoute: isDirectMessage
-            ? {
-                sessionKey: route.mainSessionKey,
-                channel: "matrix",
-                to: `room:${roomId}`,
-                accountId: route.accountId,
-              }
-            : undefined,
-          onRecordError: (err) => {
-            logger.warn("failed updating session meta", {
-              error: String(err),
-              storePath,
-              sessionKey: ctxPayload.SessionKey ?? sessionKey,
-            });
-          },
-        });
-      }
+      await core.channel.session.recordInboundSession({
+        storePath,
+        sessionKey: ctxPayload.SessionKey ?? sessionKey,
+        ctx: ctxPayload,
+        updateLastRoute: isDirectMessage
+          ? {
+              sessionKey: route.mainSessionKey,
+              channel: "matrix",
+              to: `room:${roomId}`,
+              accountId: route.accountId,
+            }
+          : undefined,
+        onRecordError: (err) => {
+          logger.warn("failed updating session meta", {
+            error: String(err),
+            storePath,
+            sessionKey: ctxPayload.SessionKey ?? sessionKey,
+          });
+        },
+      });
 
       const preview = bodyText.slice(0, 200).replace(/\n/g, "\\n");
       logVerboseMessage(`matrix inbound: room=${roomId} from=${senderId} preview="${preview}"`);

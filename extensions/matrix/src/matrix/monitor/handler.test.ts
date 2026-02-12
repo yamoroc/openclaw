@@ -1,6 +1,7 @@
 import type { MatrixClient } from "@vector-im/matrix-bot-sdk";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CoreConfig } from "../../types.js";
 import { setMatrixRuntime } from "../../runtime.js";
 import { fetchEventSummary } from "../actions/summary.js";
 import { createMatrixRoomMessageHandler, resolveMatrixSessionKey } from "./handler.js";
@@ -117,7 +118,7 @@ describe("resolveMatrixSessionKey", () => {
     });
   });
 
-  it("does not create thread session for direct messages with agent scope", () => {
+  it("keeps per-sender DM session when sessionScope is agent", () => {
     const resolved = resolveMatrixSessionKey({
       sessionScope: "agent",
       route: {
@@ -129,7 +130,7 @@ describe("resolveMatrixSessionKey", () => {
     });
 
     expect(resolved).toEqual({
-      sessionKey: "agent:main-agent:matrix:main",
+      sessionKey: "agent:main-agent:matrix:direct:@alice:example.org",
       parentSessionKey: undefined,
     });
   });
@@ -220,14 +221,14 @@ describe("resolveMatrixSessionKey", () => {
   });
 });
 
-describe("createMatrixRoomMessageHandler thread retry behavior", () => {
+describe("createMatrixRoomMessageHandler thread starter fallback behavior", () => {
   const mockedFetchEventSummary = vi.mocked(fetchEventSummary);
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("continues processing and skips session recording when thread starter fetch returns undefined", async () => {
+  it("continues processing and records session when thread starter fetch returns undefined", async () => {
     mockedFetchEventSummary.mockResolvedValueOnce(undefined);
     const harness = createThreadRetryHarness();
 
@@ -238,7 +239,7 @@ describe("createMatrixRoomMessageHandler thread retry behavior", () => {
       "!room:example.org",
       "$ThreadRoot:Example.Org",
     );
-    expect(harness.mockRecordInboundSession).not.toHaveBeenCalled();
+    expect(harness.mockRecordInboundSession).toHaveBeenCalledTimes(1);
     expect(harness.mockDispatchReplyFromConfig).toHaveBeenCalledTimes(1);
 
     const dispatchArgs = harness.mockDispatchReplyFromConfig.mock.calls[0]?.[0] as {
@@ -246,18 +247,45 @@ describe("createMatrixRoomMessageHandler thread retry behavior", () => {
     };
     expect(dispatchArgs.ctx.ParentSessionKey).toBe("agent:main:matrix:channel:!room:example.org");
     expect(dispatchArgs.ctx.ThreadStarterBody).toBeUndefined();
-    expect(harness.logVerboseMessage).toHaveBeenCalledWith(expect.stringContaining("retryable"));
+    expect(harness.logVerboseMessage).toHaveBeenCalledWith(
+      expect.stringContaining("continuing without thread starter"),
+    );
   });
 
-  it("continues processing and skips session recording when thread starter fetch throws", async () => {
+  it("continues processing and records session when thread starter fetch throws", async () => {
     mockedFetchEventSummary.mockRejectedValueOnce(new Error("boom"));
     const harness = createThreadRetryHarness();
 
     await harness.handler("!room:example.org", createThreadMessageEvent());
 
-    expect(harness.mockRecordInboundSession).not.toHaveBeenCalled();
+    expect(harness.mockRecordInboundSession).toHaveBeenCalledTimes(1);
     expect(harness.mockDispatchReplyFromConfig).toHaveBeenCalledTimes(1);
-    expect(harness.logVerboseMessage).toHaveBeenCalledWith(expect.stringContaining("retryable"));
+    expect(harness.logVerboseMessage).toHaveBeenCalledWith(
+      expect.stringContaining("continuing without thread starter"),
+    );
+  });
+
+  it("uses resolved thread session key when checking existing thread sessions", async () => {
+    const threadSessionKey = "agent:main:matrix:main:thread:$ThreadRoot:Example.Org";
+    const harness = createThreadRetryHarness({
+      cfg: {
+        channels: {
+          matrix: {
+            sessionScope: "agent",
+          },
+        },
+      },
+      readSessionUpdatedAt: ({ sessionKey }) =>
+        sessionKey === threadSessionKey ? Date.now() : undefined,
+    });
+
+    await harness.handler("!room:example.org", createThreadMessageEvent());
+
+    expect(harness.mockReadSessionUpdatedAt).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionKey: threadSessionKey }),
+    );
+    expect(mockedFetchEventSummary).not.toHaveBeenCalled();
+    expect(harness.mockRecordInboundSession).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -278,12 +306,15 @@ function createThreadMessageEvent(): MatrixRawEvent {
   };
 }
 
-function createThreadRetryHarness() {
+function createThreadRetryHarness(options?: {
+  cfg?: CoreConfig;
+  readSessionUpdatedAt?: (params: { storePath: string; sessionKey: string }) => number | undefined;
+}) {
   const client = {
     getUserId: vi.fn().mockResolvedValue("@bot:example.org"),
   } as unknown as MatrixClient;
 
-  const mockReadSessionUpdatedAt = vi.fn(() => undefined);
+  const mockReadSessionUpdatedAt = vi.fn(options?.readSessionUpdatedAt ?? (() => undefined));
   const mockRecordInboundSession = vi.fn().mockResolvedValue(undefined);
   const mockDispatchReplyFromConfig = vi.fn().mockResolvedValue({
     queuedFinal: true,
@@ -363,7 +394,7 @@ function createThreadRetryHarness() {
   const handler = createMatrixRoomMessageHandler({
     client,
     core,
-    cfg: {},
+    cfg: options?.cfg ?? {},
     runtime,
     logger,
     logVerboseMessage,
@@ -400,6 +431,7 @@ function createThreadRetryHarness() {
     handler,
     logVerboseMessage,
     mockDispatchReplyFromConfig,
+    mockReadSessionUpdatedAt,
     mockRecordInboundSession,
   };
 }
