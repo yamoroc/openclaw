@@ -161,3 +161,4 @@ jobs:
       - name: No-op (already up to date)
         if: steps.rebase.outputs.has_changes != 'true'
         run: echo "No upstream changes requiring sync."
+# Forcing re-parse
