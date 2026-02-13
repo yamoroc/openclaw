@@ -1,3 +1,5 @@
+> **Note**: `custom-main` is the default development and production branch for this fork. The `main` branch is maintained as a clean mirror of the upstream repository.
+
 # 🦞 OpenClaw — Personal AI Assistant
 
 <p align="center">
