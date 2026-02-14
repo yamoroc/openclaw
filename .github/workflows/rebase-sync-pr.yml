@@ -142,12 +142,14 @@ jobs:
         env:
           # Keep token consistent with checkout/push auth path.
           GH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           HEAD_BRANCH="${{ steps.rebase.outputs.branch_name }}"
           BASE_BRANCH="${TARGET_BRANCH}"
 
           PR_NUMBER=$(gh pr list \
+            --repo "$GH_REPO" \
             --state open \
             --base "$BASE_BRANCH" \
             --head "$HEAD_BRANCH" \
@@ -170,12 +172,14 @@ jobs:
 
           if [ -n "${PR_NUMBER}" ] && [ "${PR_NUMBER}" != "null" ]; then
             gh pr edit "$PR_NUMBER" \
+              --repo "$GH_REPO" \
               --title "chore(sync): rebase ${BASE_BRANCH} onto upstream/main ($(date +%F))" \
               --body-file "$BODY_FILE"
           else
             # GitHub can lag right after branch push; retry PR creation briefly.
             for i in {1..6}; do
               if gh pr create \
+                --repo "$GH_REPO" \
                 --base "$BASE_BRANCH" \
                 --head "$HEAD_BRANCH" \
                 --title "chore(sync): rebase ${BASE_BRANCH} onto upstream/main ($(date +%F))" \
