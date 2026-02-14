@@ -28,6 +28,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Prefer PAT (with workflow permission) when available,
+          # fallback to GITHUB_TOKEN for normal repos.
+          token: ${{ secrets.WORKFLOW_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Setup git identity + rerere
         run: |
@@ -121,7 +124,8 @@ jobs:
       - name: Create or update PR
         if: steps.rebase.outputs.has_changes == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Keep token consistent with checkout/push auth path.
+          GH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           HEAD_BRANCH="${{ steps.rebase.outputs.branch_name }}"
