@@ -121,6 +121,22 @@ jobs:
           # Safety rule: NEVER push target branch directly from automation
           git push --force-with-lease origin "${{ steps.rebase.outputs.branch_name }}"
 
+      - name: Wait for temp branch visibility
+        if: steps.rebase.outputs.has_changes == 'true'
+        run: |
+          set -euo pipefail
+          BRANCH="${{ steps.rebase.outputs.branch_name }}"
+          for i in {1..12}; do
+            if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
+              echo "Branch ${BRANCH} is visible on origin."
+              exit 0
+            fi
+            echo "Branch ${BRANCH} not visible yet (${i}/12); retry in 5s..."
+            sleep 5
+          done
+          echo "ERROR: branch ${BRANCH} was not visible on origin after retries."
+          exit 1
+
       - name: Create or update PR
         if: steps.rebase.outputs.has_changes == 'true'
         env:
@@ -157,11 +173,22 @@ jobs:
               --title "chore(sync): rebase ${BASE_BRANCH} onto upstream/main ($(date +%F))" \
               --body-file "$BODY_FILE"
           else
-            gh pr create \
-              --base "$BASE_BRANCH" \
-              --head "$HEAD_BRANCH" \
-              --title "chore(sync): rebase ${BASE_BRANCH} onto upstream/main ($(date +%F))" \
-              --body-file "$BODY_FILE"
+            # GitHub can lag right after branch push; retry PR creation briefly.
+            for i in {1..6}; do
+              if gh pr create \
+                --base "$BASE_BRANCH" \
+                --head "$HEAD_BRANCH" \
+                --title "chore(sync): rebase ${BASE_BRANCH} onto upstream/main ($(date +%F))" \
+                --body-file "$BODY_FILE"; then
+                exit 0
+              fi
+              if [ "$i" -lt 6 ]; then
+                echo "gh pr create failed (${i}/6); retry in 5s..."
+                sleep 5
+              fi
+            done
+            echo "ERROR: failed to create PR after retries."
+            exit 1
           fi
 
       - name: No-op (already up to date)
