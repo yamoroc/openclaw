@@ -39,16 +39,11 @@ export type MatrixActionConfig = {
   channelInfo?: boolean;
 };
 
-/** Per-account Matrix config (excludes the accounts field to prevent recursion). */
-export type MatrixAccountConfig = Omit<MatrixConfig, "accounts">;
-
 export type MatrixConfig = {
   /** Optional display name for this account (used in CLI/UI lists). */
   name?: string;
   /** If false, do not start Matrix. Default: true. */
   enabled?: boolean;
-  /** Multi-account configuration keyed by account ID. */
-  accounts?: Record<string, MatrixAccountConfig>;
   /** Matrix homeserver URL (https://matrix.example.org). */
   homeserver?: string;
   /** Matrix user id (@user:server). */
@@ -73,6 +68,8 @@ export type MatrixConfig = {
   replyToMode?: ReplyToMode;
   /** How to handle thread replies (off|inbound|always). */
   threadReplies?: "off" | "inbound" | "always";
+  /** Session scope for Matrix room routing (room=per-room, agent=shared across rooms for the same agent; DMs stay per-sender). */
+  sessionScope?: "room" | "agent";
   /** Outbound text chunk size (chars). Default: 4000. */
   textChunkLimit?: number;
   /** Chunking mode: "length" (default) splits by size; "newline" splits on every newline. */

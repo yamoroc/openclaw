@@ -1,8 +1,8 @@
 import { format } from "node:util";
 import { mergeAllowlist, summarizeMapping, type RuntimeEnv } from "openclaw/plugin-sdk";
+import type { CoreConfig, ReplyToMode } from "../../types.js";
 import { resolveMatrixTargets } from "../../resolve-targets.js";
 import { getMatrixRuntime } from "../../runtime.js";
-import type { CoreConfig, ReplyToMode } from "../../types.js";
 import { resolveMatrixAccount } from "../accounts.js";
 import { setActiveMatrixClient } from "../active-client.js";
 import {
@@ -245,6 +245,7 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
   const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
   const groupPolicyRaw = accountConfig.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
   const groupPolicy = allowlistOnly && groupPolicyRaw === "open" ? "allowlist" : groupPolicyRaw;
+  const forceRoomRouting = cfg.channels?.matrix?.forceRoomRouting ?? false;
   const replyToMode = opts.replyToMode ?? accountConfig.replyToMode ?? "off";
   const threadReplies = accountConfig.threadReplies ?? "inbound";
   const dmConfig = accountConfig.dm;
@@ -273,6 +274,7 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
     roomsConfig,
     mentionRegexes,
     groupPolicy,
+    forceRoomRouting,
     replyToMode,
     threadReplies,
     dmEnabled,
