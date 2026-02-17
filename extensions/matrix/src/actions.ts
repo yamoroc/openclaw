@@ -9,6 +9,7 @@ import {
 } from "openclaw/plugin-sdk";
 import type { CoreConfig } from "./types.js";
 import { resolveMatrixAccount } from "./matrix/accounts.js";
+import { readBooleanParam } from "./common/params.js";
 import { handleMatrixAction } from "./tool-actions.js";
 
 export const matrixMessageActions: ChannelMessageActionAdapter = {
