@@ -12,6 +12,8 @@ import {
   resolveMatrixStoragePaths,
   writeStorageMeta,
 } from "./storage.js";
+import { downloadContent_v2 } from "./download.js";
+import type { DownloadResult } from "./download.js";
 
 function sanitizeUserIdList(input: unknown, label: string): string[] {
   if (input == null) {
@@ -120,4 +122,77 @@ export async function createMatrixClient(params: {
   }
 
   return client;
+}
+
+/**
+ * Extended MatrixClient interface with HTTP/2 download support
+ */
+export interface MatrixClientWithHttp2Download extends MatrixClient {
+  /**
+   * Download content using HTTP/2 for improved performance.
+   * Falls back to HTTP/1.1 if HTTP/2 is not supported by the server.
+   *
+   * @param mxcUrl - The MXC URL (mxc://domain/mediaId)
+   * @param allowRemote - Whether to allow the server to fetch remote media (default: true)
+   * @param timeoutMs - Request timeout in milliseconds (default: 30000)
+   * @param maxRetries - Maximum number of retry attempts (default: 3)
+   * @returns Promise resolving to the downloaded content
+   */
+  downloadContent_v2(
+    mxcUrl: string,
+    allowRemote?: boolean,
+    timeoutMs?: number,
+    maxRetries?: number,
+  ): Promise<DownloadResult>;
+}
+
+/**
+ * Check if a client has been extended with HTTP/2 download support
+ */
+export function hasHttp2Download(client: MatrixClient): client is MatrixClientWithHttp2Download {
+  return "downloadContent_v2" in client;
+}
+
+/**
+ * Extend a MatrixClient with HTTP/2 download capabilities.
+ * This patches the client instance to add the downloadContent_v2 method.
+ *
+ * @param client - The MatrixClient to extend
+ * @returns The extended client with downloadContent_v2 method
+ *
+ * @example
+ * ```typescript
+ * const client = await createMatrixClient({...});
+ * const clientWithHttp2 = extendClientWithHttp2Download(client);
+ *
+ * // Now you can use HTTP/2 downloads
+ * const { data, contentType } = await clientWithHttp2.downloadContent_v2("mxc://example.com/abc123");
+ * ```
+ */
+export function extendClientWithHttp2Download(
+  client: MatrixClient,
+): MatrixClientWithHttp2Download {
+  if (hasHttp2Download(client)) {
+    return client;
+  }
+
+  const extendedClient = client as MatrixClientWithHttp2Download;
+
+  extendedClient.downloadContent_v2 = async (
+    mxcUrl: string,
+    allowRemote = true,
+    timeoutMs = 30000,
+    maxRetries = 3,
+  ): Promise<DownloadResult> => {
+    return downloadContent_v2(
+      mxcUrl,
+      client.homeserverUrl,
+      client.accessToken,
+      allowRemote,
+      timeoutMs,
+      maxRetries,
+    );
+  };
+
+  return extendedClient;
 }
