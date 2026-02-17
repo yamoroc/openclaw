@@ -7,7 +7,13 @@ import {
   type RoomPinnedEventsEventContent,
 } from "./types.js";
 
-export function summarizeMatrixRawEvent(event: MatrixRawEvent): MatrixMessageSummary {
+export function summarizeMatrixRawEvent(
+  event: MatrixRawEvent,
+  opts?: {
+    includeMedia?: boolean;
+    client?: MatrixClient;
+  }
+): MatrixMessageSummary {
   const content = event.content as RoomMessageEventContent;
   const relates = content["m.relates_to"];
   let relType: string | undefined;
@@ -27,7 +33,8 @@ export function summarizeMatrixRawEvent(event: MatrixRawEvent): MatrixMessageSum
           eventId,
         }
       : undefined;
-  return {
+  
+  const summary: MatrixMessageSummary = {
     eventId: event.event_id,
     sender: event.sender,
     body: content.body,
@@ -35,6 +42,39 @@ export function summarizeMatrixRawEvent(event: MatrixRawEvent): MatrixMessageSum
     timestamp: event.origin_server_ts,
     relatesTo,
   };
+  
+  // 处理媒体信息
+  if (opts?.includeMedia && content.msgtype?.startsWith("m.image")) {
+    const info = content.info as Record<string, unknown> | undefined;
+    const mxcUrl = content.url as string | undefined;
+    const encryptedMxc = (content.file as Record<string, unknown> | undefined)?.url as string | undefined;
+    const mxcUrlToUse = mxcUrl || encryptedMxc;
+    
+    if (mxcUrlToUse) {
+      summary.media = {
+        mxcUrl: mxcUrlToUse,
+        downloadUrl: opts.client?.mxcToHttp?.(mxcUrlToUse) || buildMxcDownloadUrl(mxcUrlToUse),
+        encrypted: mxcUrl === undefined && encryptedMxc !== undefined,
+        contentType: typeof info?.mimetype === "string" ? info.mimetype : undefined,
+        sizeBytes: typeof info?.size === "number" ? info.size : undefined,
+      };
+    }
+  }
+  
+  return summary;
+}
+
+/**
+ * Build HTTP download URL from MXC URL
+ * mxc://server/mediaId -> https://server/_matrix/media/r0/download/server/mediaId
+ */
+function buildMxcDownloadUrl(mxcUrl: string): string | undefined {
+  if (!mxcUrl.startsWith("mxc://")) return undefined;
+  const parts = mxcUrl.slice(6).split("/");
+  if (parts.length < 2) return undefined;
+  const [server, ...mediaIdParts] = parts;
+  const mediaId = mediaIdParts.join("/");
+  return `https://${server}/_matrix/media/r0/download/${server}/${mediaId}`;
 }
 
 export async function readPinnedEvents(client: MatrixClient, roomId: string): Promise<string[]> {
@@ -61,13 +101,19 @@ export async function fetchEventSummary(
   client: MatrixClient,
   roomId: string,
   eventId: string,
+  opts?: {
+    includeMedia?: boolean;
+  }
 ): Promise<MatrixMessageSummary | null> {
   try {
     const raw = (await client.getEvent(roomId, eventId)) as unknown as MatrixRawEvent;
     if (raw.unsigned?.redacted_because) {
       return null;
     }
-    return summarizeMatrixRawEvent(raw);
+    return summarizeMatrixRawEvent(raw, {
+      includeMedia: opts?.includeMedia,
+      client,
+    });
   } catch {
     // Event not found, redacted, or inaccessible - return null
     return null;
