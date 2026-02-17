@@ -71,6 +71,14 @@ export type MatrixMessageSummary = {
     eventId?: string;
     key?: string;
   };
+  media?: {
+    mxcUrl?: string;
+    downloadUrl?: string;
+    encrypted?: boolean;
+    contentType?: string;
+    sizeBytes?: number;
+    durationMs?: number;
+  };
 };
 
 export type MatrixReactionSummary = {
