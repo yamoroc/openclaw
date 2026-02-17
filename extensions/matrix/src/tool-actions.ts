@@ -2,6 +2,7 @@ import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import {
   createActionGate,
   jsonResult,
+  readBooleanParam,
   readNumberParam,
   readReactionParams,
   readStringParam,
@@ -109,10 +110,12 @@ export async function handleMatrixAction(
         const limit = readNumberParam(params, "limit", { integer: true });
         const before = readStringParam(params, "before");
         const after = readStringParam(params, "after");
+        const includeMedia = readBooleanParam(params, "includeMedia");
         const result = await readMatrixMessages(roomId, {
           limit: limit ?? undefined,
           before: before ?? undefined,
           after: after ?? undefined,
+          includeMedia: includeMedia ?? undefined,
         });
         return jsonResult({ ok: true, ...result });
       }
