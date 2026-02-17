@@ -2,6 +2,7 @@ import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import {
   createActionGate,
   jsonResult,
+  readBooleanParam,
   readNumberParam,
   readReactionParams,
   readStringParam,
