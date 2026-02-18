@@ -1,5 +1,6 @@
 import type { MatrixClient } from "@vector-im/matrix-bot-sdk";
 import { getMatrixRuntime } from "../../runtime.js";
+import { downloadContent_v2 } from "../client/download.js";
 
 // Type for encrypted file info
 type EncryptedFile = {
@@ -21,17 +22,17 @@ async function fetchMatrixMediaBuffer(params: {
   mxcUrl: string;
   maxBytes: number;
 }): Promise<{ buffer: Buffer; headerType?: string } | null> {
-  // @vector-im/matrix-bot-sdk provides mxcToHttp helper
-  const url = params.client.mxcToHttp(params.mxcUrl);
-  if (!url) {
-    return null;
-  }
-
-  // Use the client's download method which handles auth
+  // Use HTTP/2 optimized downloadContent_v2
   try {
-    const result = await params.client.downloadContent(params.mxcUrl);
-    const raw = result.data ?? result;
-    const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+    const homeserverUrl = params.client.homeserverUrl || "";
+    const accessToken = (params.client as { accessToken?: string }).accessToken || "";
+
+    const result = await downloadContent_v2(params.mxcUrl, homeserverUrl, accessToken, {
+      maxRetries: 3,
+      retryDelay: 1000,
+    });
+
+    const buffer = result.data;
 
     if (buffer.byteLength > params.maxBytes) {
       throw new Error("Matrix media exceeds configured size limit");
