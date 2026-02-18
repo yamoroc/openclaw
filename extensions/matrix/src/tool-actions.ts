@@ -6,6 +6,8 @@ import {
   readReactionParams,
   readStringParam,
 } from "openclaw/plugin-sdk";
+import type { CoreConfig } from "./types.js";
+import { readBooleanParam } from "./common/params.js";
 import {
   deleteMatrixMessage,
   editMatrixMessage,
@@ -20,7 +22,6 @@ import {
   unpinMatrixMessage,
 } from "./matrix/actions.js";
 import { reactMatrixMessage } from "./matrix/send.js";
-import type { CoreConfig } from "./types.js";
 
 const messageActions = new Set(["sendMessage", "editMessage", "deleteMessage", "readMessages"]);
 const reactionActions = new Set(["react", "reactions"]);
@@ -108,10 +109,12 @@ export async function handleMatrixAction(
         const limit = readNumberParam(params, "limit", { integer: true });
         const before = readStringParam(params, "before");
         const after = readStringParam(params, "after");
+        const includeMedia = readBooleanParam(params, "includeMedia");
         const result = await readMatrixMessages(roomId, {
           limit: limit ?? undefined,
           before: before ?? undefined,
           after: after ?? undefined,
+          includeMedia: includeMedia ?? undefined,
         });
         return jsonResult({ ok: true, ...result });
       }
