@@ -137,6 +137,32 @@ jobs:
           echo "ERROR: branch ${BRANCH} was not visible on origin after retries."
           exit 1
 
+      - name: Close stale rebase-sync PRs
+        if: steps.rebase.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Close any existing open rebase-sync PRs before creating a new one
+          OPEN_PRS=$(gh pr list \
+            --repo "$GH_REPO" \
+            --state open \
+            --base "${TARGET_BRANCH}" \
+            --search "chore(sync): rebase" \
+            --json number,headRefName \
+            -q '.[] | "\(.number) \(.headRefName)"')
+
+          if [ -n "$OPEN_PRS" ]; then
+            echo "$OPEN_PRS" | while read -r pr_num branch_name; do
+              echo "Closing stale PR #${pr_num} (branch: ${branch_name})..."
+              gh pr close "$pr_num" --repo "$GH_REPO" --delete-branch \
+                --comment "Auto-closed: superseded by newer rebase-sync run." || true
+            done
+          else
+            echo "No stale rebase-sync PRs to close."
+          fi
+
       - name: Create or update PR
         if: steps.rebase.outputs.has_changes == 'true'
         env:
