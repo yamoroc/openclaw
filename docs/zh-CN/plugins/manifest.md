@@ -57,7 +57,8 @@ x-i18n:
 ## 验证行为
 
 - 未知的 `channels.*` 键会被视为**错误**，除非该渠道 id 已在插件清单中声明。
-- `plugins.entries.<id>`、`plugins.allow`、`plugins.deny` 和 `plugins.slots.*` 必须引用**可发现的**插件 id。未知 id 会被视为**错误**。
+- `plugins.entries.<id>` 必须引用**可发现的**插件 id。未知 id 会发出警告，但不会导致验证失败。
+- `plugins.allow`、`plugins.deny` 和 `plugins.slots.*` 应引用**可发现的**插件 id。未知 id 会发出警告，并在运行时被清理（过滤掉），从而确保在插件被移除或重命名后升级时网关仍能正常启动。
 - 如果插件已安装但清单或 Schema 损坏或缺失，验证将失败，Doctor 会报告插件错误。
 - 如果插件配置存在但插件已**禁用**，配置会被保留，并在 Doctor 和日志中显示**警告**。
 
