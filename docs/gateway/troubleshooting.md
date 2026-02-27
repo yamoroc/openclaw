@@ -330,6 +330,39 @@ openclaw gateway install --force
 openclaw gateway restart
 ```
 
+### 4) Plugin config with stale plugin IDs
+
+```bash
+openclaw config get plugins
+openclaw doctor
+openclaw logs --follow
+```
+
+What to check:
+
+- Warnings about `plugin not found` or `plugin removed` in validation output.
+- Stale plugin IDs in `plugins.allow`, `plugins.deny`, or `plugins.slots.memory`.
+
+What changed:
+
+- Unknown plugin IDs in `plugins.allow`, `plugins.deny`, or `plugins.slots.memory` no longer cause validation failures.
+- Unknown IDs are now filtered out at runtime (with warnings) instead of rejecting the config.
+- This makes gateway startup resilient when plugins are removed, renamed, or customized locally across upgrades.
+
+How to fix:
+
+- Remove stale plugin IDs from your config to silence warnings:
+
+```bash
+# View current plugin config
+openclaw config get plugins
+
+# Edit to remove unknown IDs from allow/deny/slots
+openclaw config edit
+```
+
+- Alternatively, ignore the warnings — the gateway will start and the stale IDs will be silently ignored.
+
 Related:
 
 - [/gateway/pairing](/gateway/pairing)

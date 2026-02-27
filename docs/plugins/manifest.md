@@ -54,8 +54,8 @@ Optional keys:
 
 - Unknown `channels.*` keys are **errors**, unless the channel id is declared by
   a plugin manifest.
-- `plugins.entries.<id>`, `plugins.allow`, `plugins.deny`, and `plugins.slots.*`
-  must reference **discoverable** plugin ids. Unknown ids are **errors**.
+- `plugins.entries.<id>` must reference **discoverable** plugin ids. Unknown ids emit warnings but do not fail validation.
+- `plugins.allow`, `plugins.deny`, and `plugins.slots.*` should reference **discoverable** plugin ids. Unknown ids emit warnings and are sanitized (filtered out) at runtime so gateway startup remains resilient when plugins are removed or renamed across upgrades.
 - If a plugin is installed but has a broken or missing manifest or schema,
   validation fails and Doctor reports the plugin error.
 - If plugin config exists but the plugin is **disabled**, the config is kept and

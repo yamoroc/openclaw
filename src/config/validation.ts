@@ -358,7 +358,8 @@ function validateConfigObjectWithPluginsBase(
       continue;
     }
     if (!knownIds.has(pluginId)) {
-      pushMissingPluginIssue("plugins.allow", pluginId);
+      // Keep gateway startup resilient when plugins are removed/renamed across upgrades.
+      pushMissingPluginIssue("plugins.allow", pluginId, { warnOnly: true });
     }
   }
 
@@ -368,13 +369,15 @@ function validateConfigObjectWithPluginsBase(
       continue;
     }
     if (!knownIds.has(pluginId)) {
-      pushMissingPluginIssue("plugins.deny", pluginId);
+      // Keep gateway startup resilient when plugins are removed/renamed across upgrades.
+      pushMissingPluginIssue("plugins.deny", pluginId, { warnOnly: true });
     }
   }
 
   const memorySlot = normalizedPlugins.slots.memory;
   if (typeof memorySlot === "string" && memorySlot.trim() && !knownIds.has(memorySlot)) {
-    pushMissingPluginIssue("plugins.slots.memory", memorySlot);
+    // Keep gateway startup resilient when plugins are removed/renamed across upgrades.
+    pushMissingPluginIssue("plugins.slots.memory", memorySlot, { warnOnly: true });
   }
 
   let selectedMemoryPluginId: string | null = null;
@@ -442,6 +445,26 @@ function validateConfigObjectWithPluginsBase(
         path: `plugins.entries.${pluginId}`,
         message: `plugin disabled (${reason ?? "disabled"}) but config is present`,
       });
+    }
+  }
+
+  // Sanitize config to filter out unknown plugin IDs so they are ignored at runtime.
+  if (config.plugins) {
+    const plugins = config.plugins;
+    if (Array.isArray(plugins.allow)) {
+      plugins.allow = plugins.allow.filter((id) => knownIds.has(id));
+    }
+    if (Array.isArray(plugins.deny)) {
+      plugins.deny = plugins.deny.filter((id) => knownIds.has(id));
+    }
+    if (plugins.slots?.memory) {
+      const memSlot = plugins.slots.memory;
+      const normalizedMemSlot = memSlot.trim().toLowerCase();
+      // Preserve "none" as a valid disable value (case-insensitive); only clear unknown plugin IDs
+      if (normalizedMemSlot !== "none" && !knownIds.has(memSlot)) {
+        // Clear unknown memory slot so default is used (don't leave stale value)
+        delete plugins.slots.memory;
+      }
     }
   }
 
